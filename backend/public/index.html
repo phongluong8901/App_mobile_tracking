@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Dashboard - Điểm Danh & Live Tracking</title>
+  
+  <!-- Leaflet CSS & JS cho Bản đồ -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  
+  <!-- Socket.IO Client -->
+  <script src="/socket.io/socket.io.js"></script>
+
+  <style>
+    :root {
+      --primary: #1976d2;
+      --success: #2e7d32;
+      --danger: #d32f2f;
+      --bg: #f5f7fb;
+      --surface: #ffffff;
+      --text: #212529;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background-color: var(--bg); color: var(--text); display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+    header {
+      background: var(--primary);
+      color: white;
+      padding: 12px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+    header h1 { font-size: 1.25rem; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255,255,255,0.2);
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 0.85rem;
+    }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #4caf50; }
+
+    .main-container {
+      display: flex;
+      flex: 1;
+      height: calc(100vh - 56px);
+    }
+
+    /* Left: Map */
+    .map-section {
+      flex: 6;
+      height: 100%;
+      position: relative;
+    }
+    #map { width: 100%; height: 100%; }
+
+    /* Right: Activity Feed & Logs */
+    .sidebar {
+      flex: 5;
+      background: var(--surface);
+      border-left: 1px solid #e0e0e0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .ts-summary-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .ts-stat {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 10px;
+      text-align: center;
+    }
+    .ts-stat .val { font-size: 1.25rem; font-weight: 800; }
+    .ts-stat .lbl { font-size: 0.72rem; color: #64748b; font-weight: 600; margin-top: 2px; }
+
+    .ts-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.78rem;
+      background: white;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid #e2e8f0;
+    }
+    .ts-table th {
+      background: #0f172a;
+      color: white;
+      padding: 8px 6px;
+      text-align: center;
+      font-weight: 700;
+      font-size: 0.72rem;
+    }
+    .ts-table td {
+      padding: 8px 6px;
+      border-bottom: 1px solid #f1f5f9;
+      text-align: center;
+    }
+    .ts-slot {
+      display: inline-block;
+      padding: 2px 5px;
+      border-radius: 4px;
+      font-weight: 700;
+      font-size: 0.72rem;
+    }
+    .ts-ok { background: #dcfce7; color: #15803d; }
+    .ts-warn { background: #fef3c7; color: #b45309; }
+    .ts-miss { background: #f1f5f9; color: #94a3b8; }
+
+    .tabs {
+      display: flex;
+      border-bottom: 1px solid #e0e0e0;
+      background: #fafafa;
+    }
+    .tab-btn {
+      flex: 1;
+      padding: 14px;
+      border: none;
+      background: none;
+      font-weight: 600;
+      cursor: pointer;
+      color: #666;
+      transition: all 0.2s;
+    }
+    .tab-btn.active {
+      color: var(--primary);
+      border-bottom: 2px solid var(--primary);
+      background: white;
+    }
+
+    .tab-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+    }
+
+    .card {
+      background: white;
+      border: 1px solid #e9ecef;
+      border-radius: 8px;
+      padding: 12px 14px;
+      margin-bottom: 10px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      transition: all 0.2s;
+    }
+    .card.success { border-left: 4px solid var(--success); }
+    .card.rejected { border-left: 4px solid var(--danger); }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 6px;
+      font-size: 0.85rem;
+    }
+    .user-tag { font-weight: bold; font-size: 0.95rem; }
+    .time-tag { color: #888; font-size: 0.8rem; }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .badge-success { background: #e8f5e9; color: var(--success); }
+    .badge-danger { background: #ffebee; color: var(--danger); }
+
+    .card-body {
+      font-size: 0.85rem;
+      color: #555;
+      line-height: 1.4;
+    }
+
+    /* Live marker styling */
+    .pulse-marker {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--primary);
+      border: 2px solid white;
+      box-shadow: 0 0 0 4px rgba(25, 118, 210, 0.4);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>📍 Dashboard Giám Sát Điểm Danh & Live Tracking</h1>
+    <div class="status-badge">
+      <div class="status-dot" id="socketStatusDot"></div>
+      <span id="socketStatusText">Đang kết nối...</span>
+    </div>
+  </header>
+
+  <div class="main-container">
+    <!-- Map Section -->
+    <div class="map-section">
+      <div id="map"></div>
+    </div>
+
+    <!-- Sidebar Activity -->
+    <div class="sidebar">
+      <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('timesheet')">📊 Bảng Chấm Công</button>
+        <button class="tab-btn" onclick="switchTab('checkins')">🕒 Nhật Ký Lượt</button>
+        <button class="tab-btn" onclick="switchTab('tracking')">📍 Live GPS</button>
+      </div>
+
+      <div id="timesheetTab" class="tab-content">
+        <div id="timesheetContainer">
+          <p style="color: #888; text-align: center; margin-top: 20px;">Đang tổng hợp bảng chấm công...</p>
+        </div>
+      </div>
+
+      <div id="checkinsTab" class="tab-content" style="display: none;">
+        <div id="checkinList">
+          <p style="color: #888; text-align: center; margin-top: 20px;">Đang tải lịch sử điểm danh...</p>
+        </div>
+      </div>
+
+      <div id="trackingTab" class="tab-content" style="display: none;">
+        <div id="trackingList">
+          <p style="color: #888; text-align: center; margin-top: 20px;">Chưa có nhân viên nào bật Live Tracking.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Tọa độ công ty theo Backend Spec
+    const COMPANY_LAT = 21.028511;
+    const COMPANY_LNG = 105.854444;
+    const GEOFENCE_RADIUS = 200; // mét
+
+    // 1. Khởi tạo Bản đồ Leaflet (Dùng OpenStreetMap 100% miễn phí, không cần API Key)
+    const map = L.map('map').setView([COMPANY_LAT, COMPANY_LNG], 16);
+
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
+
+    // Marker Trụ sở Công ty
+    const companyIcon = L.icon({
+      iconUrl: 'https://cdn-icons-png.flaticon.com/512/8044/8044820.png',
+      iconSize: [38, 38],
+      iconAnchor: [19, 38],
+      popupAnchor: [0, -38]
+    });
+
+    let officeMarker = L.marker([COMPANY_LAT, COMPANY_LNG], { icon: companyIcon })
+      .addTo(map)
+      .bindPopup('<b>🏢 Trụ sở Công Ty</b><br>Bán kính chấm công: 200m')
+      .openPopup();
+
+    // Vòng tròn Geofence bán kính chấm công
+    let officeCircle = L.circle([COMPANY_LAT, COMPANY_LNG], {
+      color: '#1976d2',
+      fillColor: '#2196f3',
+      fillOpacity: 0.18,
+      weight: 2.5,
+      radius: GEOFENCE_RADIUS
+    }).addTo(map);
+
+    function updateOfficeVisual(lat, lng, radius) {
+      if (officeMarker) officeMarker.setLatLng([lat, lng]);
+      if (officeCircle) {
+        officeCircle.setLatLng([lat, lng]);
+        officeCircle.setRadius(radius);
+      }
+      officeMarker.bindPopup(`<b>🏢 Vị Trí Chấm Công</b><br>Bán kính: ${radius}m<br>Tọa độ: ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+    }
+
+    // Tự tải cấu hình công ty từ API
+    fetch('/api/office-config')
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.data) {
+          updateOfficeVisual(data.data.lat, data.data.lng, data.data.maxRadiusMeters);
+        }
+      })
+      .catch(() => {});
+
+    // Lưu danh sách marker nhân viên đang Live
+    const userMarkers = new Map();
+
+    // 2. Kết nối Socket.IO
+    const socket = io();
+
+    const dot = document.getElementById('socketStatusDot');
+    const statusText = document.getElementById('socketStatusText');
+
+    socket.on('connect', () => {
+      dot.style.background = '#4caf50';
+      statusText.innerText = 'Realtime Connected';
+    });
+
+    socket.on('disconnect', () => {
+      dot.style.background = '#f44336';
+      statusText.innerText = 'Mất kết nối';
+    });
+
+    // Sự kiện nhận tọa độ di chuyển realtime từ App Flutter
+    socket.on('admin:location_stream', (data) => {
+      updateUserLocationOnMap(data);
+    });
+
+    socket.on('admin:live-location', (data) => {
+      updateUserLocationOnMap(data);
+    });
+
+    // Lắng nghe thay đổi vị trí / bán kính công ty realtime
+    socket.on('office:config_updated', (config) => {
+      if (config && config.lat && config.lng) {
+        updateOfficeVisual(config.lat, config.lng, config.maxRadiusMeters || 200);
+      }
+    });
+
+    // Sự kiện có người vừa điểm danh
+    socket.on('admin:new-checkin', (record) => {
+      prependCheckInRecord(record);
+      // Hiệu ứng marker tạm thời tại điểm điểm danh
+      const marker = L.circleMarker([record.lat, record.lng], {
+        radius: 8,
+        color: record.status === 'SUCCESS' ? '#2e7d32' : '#d32f2f',
+        fillOpacity: 0.9
+      }).addTo(map);
+      marker.bindPopup(`<b>${record.name || record.userId}</b> vừa điểm danh!<br>${record.status}`).openPopup();
+    });
+
+    function updateUserLocationOnMap(data) {
+      const { userId, lat, lng, speed, timestamp, distanceToOfficeMeters } = data;
+      
+      let marker = userMarkers.get(userId);
+      const popupContent = `<b>👤 ${userId}</b><br>Tốc độ: ${(speed || 0).toFixed(1)} m/s<br>Cách cty: ${distanceToOfficeMeters ?? '?'}m`;
+
+      if (!marker) {
+        marker = L.circleMarker([lat, lng], {
+          radius: 9,
+          color: '#ffffff',
+          weight: 2,
+          fillColor: '#e91e63',
+          fillOpacity: 1
+        }).addTo(map);
+        marker.bindPopup(popupContent);
+        userMarkers.set(userId, marker);
+      } else {
+        marker.setLatLng([lat, lng]);
+        marker.setPopupContent(popupContent);
+      }
+
+      renderOnlineUsersList();
+    }
+
+    function renderOnlineUsersList() {
+      const listEl = document.getElementById('trackingList');
+      if (userMarkers.size === 0) {
+        listEl.innerHTML = '<p style="color: #888; text-align: center; margin-top: 20px;">Chưa có nhân viên nào bật Live Tracking.</p>';
+        return;
+      }
+      let html = '';
+      userMarkers.forEach((marker, userId) => {
+        const latLng = marker.getLatLng();
+        html += `
+          <div class="card" onclick="map.panTo([${latLng.lat}, ${latLng.lng}])" style="cursor: pointer;">
+            <div class="card-header">
+              <span class="user-tag">👤 ${userId}</span>
+              <span class="badge badge-success">Online</span>
+            </div>
+            <div class="card-body">
+              Tọa độ: ${latLng.lat.toFixed(5)}, ${latLng.lng.toFixed(5)}<br>
+              <span style="color: #1976d2; font-size: 0.8rem;">👉 Bấm để xem trên bản đồ</span>
+            </div>
+          </div>
+        `;
+      });
+      listEl.innerHTML = html;
+    }
+
+    let allLogsCache = [];
+
+    // 3. Tải lịch sử điểm danh từ API
+    async function loadAttendanceHistory() {
+      try {
+        const res = await fetch('/api/attendance-logs?limit=150');
+        const json = await res.json();
+        const listEl = document.getElementById('checkinList');
+        
+        if (json.success && json.data.length > 0) {
+          allLogsCache = json.data;
+          listEl.innerHTML = json.data.map(renderRecordCard).join('');
+          renderTimesheetDashboard(allLogsCache);
+        } else {
+          listEl.innerHTML = '<p style="color: #888; text-align: center; margin-top: 20px;">Chưa có lượt điểm danh nào.</p>';
+          renderTimesheetDashboard([]);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    function getCheckTypeLabel(t) {
+      switch (t) {
+        case 'MORNING_IN': return { text: 'VÀO SÁNG (08:00)', bg: '#e0f2fe', color: '#0369a1' };
+        case 'MORNING_OUT': return { text: 'RA TRƯA (12:00)', bg: '#fef3c7', color: '#b45309' };
+        case 'AFTERNOON_IN': return { text: 'VÀO CHIỀU (13:30)', bg: '#ede9fe', color: '#6d28d9' };
+        case 'AFTERNOON_OUT': return { text: 'RA CHIỀU (17:00)', bg: '#fce7f3', color: '#be185d' };
+        case 'CHECK_OUT': return { text: 'RA CA', bg: '#fff3e0', color: '#e65100' };
+        default: return { text: 'VÀO CA', bg: '#e3f2fd', color: '#1565c0' };
+      }
+    }
+
+    function renderTimesheetDashboard(logs) {
+      const container = document.getElementById('timesheetContainer');
+      const validLogs = logs.filter(l => l.status === 'SUCCESS');
+      if (validLogs.length === 0) {
+        container.innerHTML = '<p style="color:#888;text-align:center;margin-top:24px;">Chưa có dữ liệu bảng chấm công hợp lệ.</p>';
+        return;
+      }
+
+      // Gom nhóm theo userId + Ngày (YYYY-MM-DD)
+      const groups = new Map();
+      validLogs.forEach(r => {
+        const d = new Date(r.timestamp);
+        const dayKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        const key = `${r.userId}__${dayKey}`;
+        if (!groups.has(key)) {
+          groups.set(key, {
+            userId: r.userId,
+            name: r.name || r.userId,
+            dayKey,
+            displayDate: `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`,
+            morningIn: null,
+            morningOut: null,
+            afternoonIn: null,
+            afternoonOut: null,
+            lateMins: 0,
+            earlyMins: 0
+          });
+        }
+        const g = groups.get(key);
+        const mins = d.getHours() * 60 + d.getMinutes();
+        const t = r.type || (mins < 720 ? 'MORNING_IN' : 'AFTERNOON_OUT');
+
+        if (t === 'MORNING_IN' || (t === 'CHECK_IN' && mins < 720)) {
+          if (!g.morningIn) g.morningIn = r;
+        } else if (t === 'MORNING_OUT' || (t === 'CHECK_OUT' && mins <= 795)) {
+          g.morningOut = r;
+        } else if (t === 'AFTERNOON_IN' || (t === 'CHECK_IN' && mins >= 720)) {
+          if (!g.afternoonIn) g.afternoonIn = r;
+        } else if (t === 'AFTERNOON_OUT' || (t === 'CHECK_OUT' && mins > 795)) {
+          g.afternoonOut = r;
+        }
+        g.lateMins += (r.lateMinutes || 0);
+        g.earlyMins += (r.earlyLeaveMinutes || 0);
+      });
+
+      const rows = Array.from(groups.values()).sort((a, b) => b.dayKey.localeCompare(a.dayKey));
+      let totalWorkUnits = 0;
+      let fullOnTimeDays = 0;
+      let lateOrEarlyDays = 0;
+
+      const rowHtml = rows.map(g => {
+        const hasMorning = Boolean(g.morningIn || g.morningOut);
+        const hasAfternoon = Boolean(g.afternoonIn || g.afternoonOut);
+        const units = (hasMorning && hasAfternoon) ? 1.0 : ((hasMorning || hasAfternoon) ? 0.5 : 0);
+        totalWorkUnits += units;
+
+        const isLateOrEarly = g.lateMins > 0 || g.earlyMins > 0;
+        if (units >= 1.0 && !isLateOrEarly) fullOnTimeDays++;
+        if (isLateOrEarly) lateOrEarlyDays++;
+
+        const fmtSlot = (rec) => {
+          if (!rec) return '<span class="ts-slot ts-miss">--:--</span>';
+          const dt = new Date(rec.timestamp);
+          const hm = `${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`;
+          const warn = rec.shiftStatus === 'LATE' || rec.shiftStatus === 'EARLY_LEAVE';
+          return `<span class="ts-slot ${warn ? 'ts-warn' : 'ts-ok'}">${hm}</span>`;
+        };
+
+        let statusBadge = '';
+        if (units >= 1.0 && !isLateOrEarly) {
+          statusBadge = '<span class="ts-slot ts-ok">Đủ công</span>';
+        } else if (isLateOrEarly) {
+          statusBadge = `<span class="ts-slot ts-warn">${g.lateMins > 0 ? `Muộn ${g.lateMins}p` : `Sớm ${g.earlyMins}p`}</span>`;
+        } else {
+          statusBadge = '<span class="ts-slot" style="background:#e0f2fe;color:#0369a1;">Nửa công</span>';
+        }
+
+        return `
+          <tr>
+            <td><b>${g.displayDate}</b><br><span style="color:#64748b;font-size:0.68rem;">${g.name}</span></td>
+            <td>${fmtSlot(g.morningIn)}<br>${fmtSlot(g.morningOut)}</td>
+            <td>${fmtSlot(g.afternoonIn)}<br>${fmtSlot(g.afternoonOut)}</td>
+            <td>${statusBadge}</td>
+            <td><b style="color:#0f172a;">${units.toFixed(1)}</b></td>
+          </tr>
+        `;
+      }).join('');
+
+      container.innerHTML = `
+        <div class="ts-summary-grid">
+          <div class="ts-stat">
+            <div class="val" style="color:#2563eb;">${totalWorkUnits.toFixed(1)}</div>
+            <div class="lbl">Tổng Ngày Công</div>
+          </div>
+          <div class="ts-stat">
+            <div class="val" style="color:#16a34a;">${fullOnTimeDays}</div>
+            <div class="lbl">Đủ Công Đúng Giờ</div>
+          </div>
+          <div class="ts-stat">
+            <div class="val" style="color:#d97706;">${lateOrEarlyDays}</div>
+            <div class="lbl">Đi Muộn / Về Sớm</div>
+          </div>
+        </div>
+        <div style="margin-bottom:8px;font-size:0.76rem;color:#475569;font-weight:600;">
+          ⏰ Ca Sáng: <b>08:00 – 12:00</b> (0.5 công) &nbsp;|&nbsp; Ca Chiều: <b>13:30 – 17:00</b> (0.5 công)
+        </div>
+        <table class="ts-table">
+          <thead>
+            <tr>
+              <th>Ngày / NV</th>
+              <th>Sáng<br>(08:00-12:00)</th>
+              <th>Chiều<br>(13:30-17:00)</th>
+              <th>Trạng Thái</th>
+              <th>Công</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowHtml}
+          </tbody>
+        </table>
+      `;
+    }
+
+    function renderRecordCard(r) {
+      const isSuccess = r.status === 'SUCCESS';
+      const timeStr = r.timestamp ? new Date(r.timestamp).toLocaleTimeString('vi-VN') : '';
+      const badgeInfo = getCheckTypeLabel(r.type);
+      const typeBadge = `<span class="badge" style="background:${badgeInfo.bg};color:${badgeInfo.color};margin-right:4px;">${badgeInfo.text}</span>`;
+
+      let shiftBadge = '';
+      if (isSuccess && r.shiftStatus) {
+        if (r.shiftStatus === 'ON_TIME') {
+          shiftBadge = '<span class="badge badge-success">Đúng giờ</span>';
+        } else if (r.shiftStatus === 'LATE') {
+          shiftBadge = `<span class="badge" style="background:#fff8e1;color:#f57f17;">Đi muộn ${r.lateMinutes || 0}p</span>`;
+        } else if (r.shiftStatus === 'EARLY_LEAVE') {
+          shiftBadge = `<span class="badge" style="background:#fff3e0;color:#ef6c00;">Về sớm ${r.earlyLeaveMinutes || 0}p</span>`;
+        } else if (r.shiftStatus === 'OVERTIME') {
+          shiftBadge = '<span class="badge" style="background:#f3e5f5;color:#6a1b9a;">Tăng ca</span>';
+        }
+      }
+
+      return `
+        <div class="card ${isSuccess ? 'success' : 'rejected'}">
+          <div class="card-header">
+            <span class="user-tag">👤 ${r.name ? `${r.name} (${r.userId})` : r.userId}</span>
+            <span class="time-tag">${timeStr}</span>
+          </div>
+          <div style="margin-bottom: 6px;">
+            ${typeBadge} ${shiftBadge}
+            ${r.workUnits ? `<span class="badge" style="background:#dcfce7;color:#15803d;margin-left:4px;">+${r.workUnits} công</span>` : ''}
+            ${r.workedHours ? `<span class="badge" style="background:#e8eaf6;color:#283593;margin-left:4px;">⏱ ${r.workedHours}h</span>` : ''}
+          </div>
+          <div class="card-body">
+            <div>Khoảng cách: <b>${r.distance}m</b> | Khớp mặt: <b>${(r.similarity * 100).toFixed(1)}%</b></div>
+            ${r.rejectionReason ? `<div style="color: #d32f2f; font-weight: 500; margin-top: 4px;">Lý do: ${r.rejectionReason}</div>` : ''}
+          </div>
+        </div>
+      `;
+    }
+
+    function prependCheckInRecord(record) {
+      allLogsCache.unshift(record);
+      const listEl = document.getElementById('checkinList');
+      const cardHtml = renderRecordCard(record);
+      listEl.insertAdjacentHTML('afterbegin', cardHtml);
+      renderTimesheetDashboard(allLogsCache);
+    }
+
+    function switchTab(tab) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById('timesheetTab').style.display = tab === 'timesheet' ? 'block' : 'none';
+      document.getElementById('checkinsTab').style.display = tab === 'checkins' ? 'block' : 'none';
+      document.getElementById('trackingTab').style.display = tab === 'tracking' ? 'block' : 'none';
+      if (tab === 'timesheet') {
+        document.querySelectorAll('.tab-btn')[0].classList.add('active');
+      } else if (tab === 'checkins') {
+        document.querySelectorAll('.tab-btn')[1].classList.add('active');
+      } else {
+        document.querySelectorAll('.tab-btn')[2].classList.add('active');
+      }
+    }
+
+    loadAttendanceHistory();
+  </script>
+</body>
+</html>
+

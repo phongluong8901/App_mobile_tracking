@@ -1,0 +1,68 @@
+{
+  "project_info": {
+    "project_number": "387804986198",
+    "project_id": "fluttertracking-c231c",
+    "storage_bucket": "fluttertracking-c231c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:387804986198:android:f9e97cfa6edba04deb74f7",
+        "android_client_info": {
+          "package_name": "com.example.tracking_app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "387804986198-o3g318l0veks53b1qnhkqnl6ppgtqb9c.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDd_L7zyADDEziyHtFOnJfFFD-eLkMJNdE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "387804986198-o3g318l0veks53b1qnhkqnl6ppgtqb9c.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:387804986198:android:f9e97cfa6edba04deb74f7",
+        "android_client_info": {
+          "package_name": "flutter.tracking"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "387804986198-o3g318l0veks53b1qnhkqnl6ppgtqb9c.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDd_L7zyADDEziyHtFOnJfFFD-eLkMJNdE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "387804986198-o3g318l0veks53b1qnhkqnl6ppgtqb9c.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
